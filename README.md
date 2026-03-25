@@ -83,7 +83,7 @@ make smoke-all          # Every endpoint × every payload variant
 Override model or host:
 ```bash
 make chat MODEL=qwen2.5:14b
-make smoke HOST=http://192.168.1.11:8080
+make smoke HOST=http://YOUR_SERVER_IP:8080
 ```
 
 ## Endpoints
@@ -190,7 +190,7 @@ For a remote Ollama instance (e.g. a dedicated server on your LAN), create `src/
 
 ```yaml
 ollama:
-  host: http://192.168.1.11:11434
+  host: http://YOUR_SERVER_IP:11434
   timeout-seconds: 30
   cors:
     allowed-origins:
