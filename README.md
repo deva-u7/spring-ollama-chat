@@ -4,14 +4,108 @@ A Kotlin + Spring Boot application that integrates with [Ollama](https://ollama.
 
 Rather than basic chat forwarding, this app exposes developer tools powered by local models: code review, conventional commit message generation, and multi-style text summarization — all running on your own hardware with no external API calls.
 
+## Architecture
+
+```
+HTTP Client
+      │
+      ▼
+RequestLoggingFilter      ← correlation ID, request/response logging
+      │
+      ▼
+Controller                ← maps HTTP ↔ domain types
+      │
+      ▼
+Service                   ← prompt templates, response parsing, fallbacks
+      │
+      ▼
+OllamaClient              ← WebClient, logs model + latency
+      │
+      ▼
+Ollama  (local / LAN)     ← /api/chat  /api/generate  /api/tags
+```
+
+Full design → [docs/architecture.md](docs/architecture.md)
+
+---
+
 ## Stack
 
 - **Kotlin** + **Spring Boot 3** (WebFlux — reactive, non-blocking)
-- **Ollama REST API** — `/api/chat`, `/api/generate`, `/api/tags`
+- **Ollama REST API** — chat, generate, model listing
 - **Server-Sent Events** for streaming responses
 - **WireMock** + **Spring WebFlux Test** for tests
 
+## Quick Start
+
+```bash
+# 1. Pull a model
+ollama pull phi4-mini
+
+# 2. Build
+make build
+
+# 3. Run (defaults to local profile — see Configuration)
+make run
+
+# 4. Smoke test all endpoints
+make smoke
+```
+
+## Makefile Targets
+
+```
+make build              # Compile + unit tests
+make run                # Start app  (PROFILE=local)
+make test               # Unit tests only
+make clean              # Clean build output
+
+make health             # GET  /health
+make models             # GET  /models
+
+make chat               # POST /chat
+make chat-with-system   # POST /chat  — with system prompt
+make chat-stream        # POST /chat/stream  — SSE
+
+make review-bad         # POST /tools/review  — buggy code
+make review-good        # POST /tools/review  — clean code
+make commit-feat        # POST /tools/commit  — feature diff
+make commit-fix         # POST /tools/commit  — bug fix diff
+make summarize-bullets  # POST /tools/summarize  — BULLETS
+make summarize-tldr     # POST /tools/summarize  — TLDR
+make summarize-one-liner # POST /tools/summarize — ONE_LINER
+make summarize-paragraph # POST /tools/summarize — PARAGRAPH
+
+make smoke              # Core endpoints — health, models, chat, review, commit, summarize
+make smoke-all          # Every endpoint × every payload variant
+```
+
+Override model or host:
+```bash
+make chat MODEL=qwen2.5:14b
+make smoke HOST=http://192.168.1.11:8080
+```
+
 ## Endpoints
+
+### System
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Ollama connectivity check + latency |
+| GET | `/models` | List available Ollama models with size in MB |
+
+**Health response:**
+```json
+{
+  "status": "UP",
+  "ollamaReachable": true,
+  "latencyMs": 212,
+  "defaultModel": "phi4-mini"
+}
+```
+
+---
 
 ### Chat
 
@@ -20,15 +114,15 @@ Rather than basic chat forwarding, this app exposes developer tools powered by l
 | POST | `/chat` | Single-turn chat — returns full response |
 | POST | `/chat/stream` | Streaming chat — SSE token-by-token |
 
-**Request body:**
 ```json
 {
-  "prompt": "Explain reactor pattern in 2 sentences",
+  "prompt": "What is reactive programming?",
   "model": "phi4-mini",
   "systemPrompt": "You are a concise technical writer."
 }
 ```
-`model` and `systemPrompt` are optional. Default model is configured in `application.yml`.
+
+`model` and `systemPrompt` are optional.
 
 ---
 
@@ -36,29 +130,23 @@ Rather than basic chat forwarding, this app exposes developer tools powered by l
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/tools/review` | Code review with score, summary, and issues list |
-| POST | `/tools/commit` | Generate a conventional commit message from a git diff |
+| POST | `/tools/review` | Code review with score, issues, and suggestions |
+| POST | `/tools/commit` | Conventional commit message from a git diff |
 | POST | `/tools/summarize` | Summarize text in a chosen style |
 
 **Code review:**
 ```json
-{
-  "code": "fun divide(a: Int, b: Int) = a / b",
-  "language": "Kotlin",
-  "model": "phi4-mini"
-}
+{ "code": "fun divide(a: Int, b: Int) = a / b", "language": "Kotlin" }
 ```
-
-Response:
 ```json
 {
-  "score": 4,
-  "summary": "Function lacks null/zero checks.",
+  "score": 2,
+  "summary": "Function lacks error handling for division by zero.",
   "issues": [
     {
       "severity": "CRITICAL",
-      "description": "Division by zero not handled",
-      "suggestion": "Add require(b != 0) before dividing"
+      "description": "Division by zero not handled.",
+      "suggestion": "Add require(b != 0) before dividing."
     }
   ]
 }
@@ -66,105 +154,85 @@ Response:
 
 **Commit message:**
 ```json
-{
-  "diff": "diff --git a/src/main/kotlin/Service.kt...",
-  "model": "phi4-mini"
-}
+{ "diff": "+ fun getUserById(id: UUID): User? = userRepository.findById(id).orElse(null)" }
 ```
-
-Response:
 ```json
 {
   "type": "feat",
-  "scope": "auth",
-  "description": "add JWT token validation",
-  "message": "feat(auth): add JWT token validation"
+  "scope": "user",
+  "description": "add getUserById returning nullable User",
+  "message": "feat(user): add getUserById returning nullable User"
 }
 ```
 
-**Summarize:**
+**Summarize** — styles: `PARAGRAPH` · `BULLETS` · `TLDR` · `ONE_LINER`
 ```json
-{
-  "text": "Long article text...",
-  "style": "BULLETS",
-  "model": "phi4-mini"
-}
+{ "text": "...", "style": "BULLETS" }
 ```
-
-Styles: `PARAGRAPH`, `BULLETS`, `TLDR`, `ONE_LINER`
 
 ---
 
-### System
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/models` | List available Ollama models with size in MB |
-| GET | `/health` | Check Ollama connectivity and latency |
-
-**Health response:**
-```json
-{
-  "status": "UP",
-  "ollamaReachable": true,
-  "latencyMs": 23,
-  "defaultModel": "phi4-mini"
-}
-```
-
 ## Configuration
 
+All config lives in `src/main/resources/application.yml`:
+
 ```yaml
-# src/main/resources/application.yml
 ollama:
-  host: http://localhost:11434   # Ollama server URL
-  default-model: phi4-mini      # Model used when not specified in request
-  timeout-seconds: 120          # WebClient read timeout
+  host: http://localhost:11434    # Ollama server URL
+  default-model: phi4-mini       # Used when model not specified in request
+  timeout-seconds: 120           # WebClient read timeout
+  cors:
+    allowed-origins:
+      - "*"
 ```
 
-For remote Ollama (e.g., a dedicated AI server on your local network):
+For a remote Ollama instance (e.g. a dedicated server on your LAN), create `src/main/resources/application-local.yml` — it is gitignored:
+
 ```yaml
 ollama:
   host: http://192.168.1.11:11434
+  timeout-seconds: 30
+  cors:
+    allowed-origins:
+      - "http://localhost:3000"
 ```
 
-## Running
-
-Requires a running Ollama instance with at least one model pulled.
-
+Activate with:
 ```bash
-# Pull a model first
-ollama pull phi4-mini
-
-# Run the app
-./gradlew bootRun
+make run PROFILE=local
+# or
+./gradlew bootRun --args='--spring.profiles.active=local'
 ```
-
-The API is available at `http://localhost:8080`.
 
 ## Tests
 
-Tests use WireMock to mock Ollama — no Ollama required to run them.
+Tests use WireMock to mock Ollama — no running Ollama required.
 
 ```bash
-./gradlew test
+make test
 ```
 
 ## Architecture
 
 ```
-controller/       ← Thin REST layer (request/response mapping)
-service/          ← Business logic (prompt engineering, response parsing)
+controller/       ← Thin REST layer (request/response mapping only)
+service/          ← Business logic — prompt building, response parsing
 client/           ← Ollama HTTP client (WebClient)
+config/
+  PromptLoader    ← Loads prompt templates from resources/prompts/ at startup
+filter/           ← Request logging with correlation ID (X-Correlation-Id)
 model/
   ollama/         ← Ollama API types (internal)
-  request/        ← Inbound DTOs
-  response/       ← Outbound DTOs
-config/           ← Spring configuration beans
+  request/        ← Inbound request DTOs
+  response/       ← Outbound response DTOs
 exception/        ← Global error handling
+resources/
+  prompts/        ← Prompt templates (code-review.txt, commit-message.txt, summarize.txt)
 ```
 
-The service layer is the abstraction point. When adding LangChain4j or Spring AI later, only the client layer needs to change.
+The service layer is the abstraction point. When adding LangChain4j or Spring AI, only the client layer changes — services stay the same.
+
+See [docs/architecture.md](docs/architecture.md) for the full design.
 
 ## What's Next
 
