@@ -1,0 +1,12 @@
+Analyze the following git diff and generate a conventional commit message.
+Respond with ONLY valid JSON, no explanation, no markdown.
+Use this exact format:
+{
+  "type": "<feat|fix|docs|style|refactor|test|chore>",
+  "scope": "<affected scope or null>",
+  "description": "<short description in imperative mood>",
+  "message": "<full conventional commit message e.g. feat(auth): add JWT validation>"
+}
+
+Diff:
+{diff}

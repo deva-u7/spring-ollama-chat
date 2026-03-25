@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+ollama:
+  host: http://localhost:11434
+  default-model: phi4-mini
+  timeout-seconds: 120
+  cors:
+    allowed-origins:
+      - "*"
+
+spring:
+  application:
+    name: spring-ollama-chat
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    root: INFO
+    com.deva.ollama: DEBUG
+    org.springframework.web.reactive: WARN
+    reactor.netty: WARN

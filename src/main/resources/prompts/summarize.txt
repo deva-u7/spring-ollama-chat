@@ -1,0 +1,5 @@
+{styleInstruction}
+Do not add any preamble like "Here is a summary" — just the summary itself.
+
+Text to summarize:
+{text}
