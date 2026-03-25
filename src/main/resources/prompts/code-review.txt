@@ -1,0 +1,16 @@
+Review the following {language} code. Respond with ONLY valid JSON, no explanation, no markdown.
+Use this exact JSON format:
+{
+  "score": <integer 1-10>,
+  "summary": "<one sentence overall assessment>",
+  "issues": [
+    {
+      "severity": "<CRITICAL|WARNING|INFO>",
+      "description": "<what the issue is>",
+      "suggestion": "<how to fix it>"
+    }
+  ]
+}
+
+Code:
+{code}
