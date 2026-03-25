@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>spring-ollama-chat</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #6c8fff;
+      --accent-dim: #3d4f8a;
+      --text: #e0e0e0;
+      --text-dim: #8b8fa8;
+      --green: #4caf7d;
+      --red: #e05a5a;
+      --radius: 8px;
+      --font: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+    header span { font-size: 12px; color: var(--text-dim); }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .status-dot.up { background: var(--green); }
+    .status-dot.down { background: var(--red); }
+
+    .config-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .config-bar label { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+    .config-bar input {
+      flex: 1;
+      min-width: 200px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 6px 10px;
+      outline: none;
+    }
+    .config-bar input:focus { border-color: var(--accent); }
+    .config-bar button {
+      background: var(--accent-dim);
+      border: none;
+      border-radius: var(--radius);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      padding: 6px 12px;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    .config-bar button:hover { background: var(--accent); }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 12px 16px;
+      transition: color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { border-bottom-color: var(--accent); color: var(--accent); }
+
+    .tab-panel { display: none; padding: 20px; max-width: 900px; margin: 0 auto; }
+    .tab-panel.active { display: block; }
+
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    textarea, input[type=text], select {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+    textarea:focus, input[type=text]:focus, select:focus { border-color: var(--accent); }
+    textarea { min-height: 90px; }
+    select { cursor: pointer; }
+    select option { background: var(--surface); }
+
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row .field { flex: 1; min-width: 180px; }
+
+    .actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+    .btn {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 20px;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.secondary {
+      background: var(--border);
+      color: var(--text-dim);
+    }
+    .btn.secondary:hover { background: var(--accent-dim); color: var(--text); }
+
+    .response-box {
+      margin-top: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      min-height: 80px;
+      position: relative;
+    }
+    .response-box .label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 8px 12px 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .response-content {
+      padding: 12px;
+      white-space: pre-wrap;
+      font-family: var(--font);
+      font-size: 13px;
+      overflow-x: auto;
+    }
+    .response-content.empty { color: var(--text-dim); font-family: inherit; font-size: 14px; }
+    .response-content.error { color: var(--red); }
+    .response-content.loading { color: var(--text-dim); }
+
+    .json-block { color: #a8c8ff; }
+    .streaming-cursor::after { content: '▍'; animation: blink 0.7s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    .score-badge {
+      display: inline-block;
+      background: var(--accent-dim);
+      border-radius: 4px;
+      font-size: 12px;
+      padding: 2px 8px;
+      margin-left: 8px;
+    }
+
+    .issue-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      padding: 10px 12px;
+    }
+    .issue-card .severity {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .severity.CRITICAL { color: var(--red); }
+    .severity.HIGH { color: #e08a5a; }
+    .severity.MEDIUM { color: #e0c35a; }
+    .severity.LOW { color: var(--green); }
+    .issue-desc { margin-top: 4px; font-size: 13px; }
+    .issue-suggest { margin-top: 4px; font-size: 12px; color: var(--text-dim); }
+
+    .commit-result {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .commit-msg {
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+      word-break: break-all;
+    }
+    .commit-meta { font-size: 12px; color: var(--text-dim); }
+    .commit-meta span { color: var(--text); margin-right: 12px; }
+
+    @media (max-width: 600px) {
+      .config-bar { padding: 10px 12px; }
+      .tab-panel { padding: 16px 12px; }
+      .tabs { padding: 0 12px; }
+      header { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="status-dot" id="statusDot"></div>
+  <h1>spring-ollama-chat</h1>
+  <span id="statusText">checking…</span>
+</header>
+
+<div class="config-bar">
+  <label>Base URL</label>
+  <input type="text" id="baseUrl" placeholder="http://localhost:8080" />
+  <button onclick="saveAndPing()">Connect</button>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('chat', this)">Chat</button>
+  <button class="tab-btn" onclick="switchTab('review', this)">Code Review</button>
+  <button class="tab-btn" onclick="switchTab('commit', this)">Commit</button>
+  <button class="tab-btn" onclick="switchTab('summarize', this)">Summarize</button>
+</div>
+
+<!-- ── CHAT ── -->
+<div id="tab-chat" class="tab-panel active">
+  <div class="field">
+    <label>Prompt</label>
+    <textarea id="chatPrompt" rows="4" placeholder="What is reactive programming?"></textarea>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label>Model (optional)</label>
+      <input type="text" id="chatModel" placeholder="phi4-mini" />
+    </div>
+    <div class="field">
+      <label>System Prompt (optional)</label>
+      <input type="text" id="chatSystem" placeholder="You are a concise technical writer." />
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="chatBtn" onclick="sendChat(false)">Send</button>
+    <button class="btn secondary" id="streamBtn" onclick="sendChat(true)">Stream</button>
+    <button class="btn secondary" onclick="clearResponse('chatOut')">Clear</button>
+  </div>
+  <div class="response-box">
+    <div class="label">Response</div>
+    <div class="response-content empty" id="chatOut">Response will appear here…</div>
+  </div>
+</div>
+
+<!-- ── CODE REVIEW ── -->
+<div id="tab-review" class="tab-panel">
+  <div class="field">
+    <label>Code</label>
+    <textarea id="reviewCode" rows="10" placeholder="fun divide(a: Int, b: Int) = a / b"></textarea>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label>Language</label>
+      <input type="text" id="reviewLang" placeholder="Kotlin" value="Kotlin" />
+    </div>
+    <div class="field">
+      <label>Model (optional)</label>
+      <input type="text" id="reviewModel" placeholder="phi4-mini" />
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="reviewBtn" onclick="sendReview()">Review</button>
+    <button class="btn secondary" onclick="clearResponse('reviewOut')">Clear</button>
+  </div>
+  <div class="response-box">
+    <div class="label">Review Result</div>
+    <div class="response-content empty" id="reviewOut">Result will appear here…</div>
+  </div>
+</div>
+
+<!-- ── COMMIT ── -->
+<div id="tab-commit" class="tab-panel">
+  <div class="field">
+    <label>Git Diff</label>
+    <textarea id="commitDiff" rows="10" placeholder="+ fun getUserById(id: UUID): User? = userRepository.findById(id).orElse(null)"></textarea>
+  </div>
+  <div class="field">
+    <label>Model (optional)</label>
+    <input type="text" id="commitModel" placeholder="phi4-mini" style="max-width:260px" />
+  </div>
+  <div class="actions">
+    <button class="btn" id="commitBtn" onclick="sendCommit()">Generate</button>
+    <button class="btn secondary" onclick="clearResponse('commitOut')">Clear</button>
+  </div>
+  <div class="response-box">
+    <div class="label">Commit Message</div>
+    <div class="response-content empty" id="commitOut">Result will appear here…</div>
+  </div>
+</div>
+
+<!-- ── SUMMARIZE ── -->
+<div id="tab-summarize" class="tab-panel">
+  <div class="field">
+    <label>Text</label>
+    <textarea id="sumText" rows="8" placeholder="Paste the text you want to summarize…"></textarea>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label>Style</label>
+      <select id="sumStyle">
+        <option value="PARAGRAPH">PARAGRAPH</option>
+        <option value="BULLETS" selected>BULLETS</option>
+        <option value="TLDR">TLDR</option>
+        <option value="ONE_LINER">ONE_LINER</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Model (optional)</label>
+      <input type="text" id="sumModel" placeholder="phi4-mini" />
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn" id="sumBtn" onclick="sendSummarize()">Summarize</button>
+    <button class="btn secondary" onclick="clearResponse('sumOut')">Clear</button>
+  </div>
+  <div class="response-box">
+    <div class="label">Summary</div>
+    <div class="response-content empty" id="sumOut">Result will appear here…</div>
+  </div>
+</div>
+
+<script>
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const $ = id => document.getElementById(id);
+
+  function getBase() {
+    return ($('baseUrl').value || 'http://localhost:8080').replace(/\/$/, '');
+  }
+
+  function setStatus(up, text) {
+    const dot = $('statusDot');
+    dot.className = 'status-dot ' + (up ? 'up' : 'down');
+    $('statusText').textContent = text;
+  }
+
+  function setLoading(outId, btnId, loading) {
+    const out = $(outId);
+    if (loading) {
+      out.textContent = 'Loading…';
+      out.className = 'response-content loading';
+    }
+    if (btnId) $(btnId).disabled = loading;
+  }
+
+  function showError(outId, msg) {
+    const out = $(outId);
+    out.textContent = '✖ ' + msg;
+    out.className = 'response-content error';
+  }
+
+  function clearResponse(outId) {
+    const out = $(outId);
+    out.textContent = 'Response will appear here…';
+    out.className = 'response-content empty';
+  }
+
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    $('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  const NGROK_HEADERS = { 'ngrok-skip-browser-warning': 'true' };
+
+  async function apiPost(path, body) {
+    const res = await fetch(getBase() + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => res.statusText);
+      throw new Error(`HTTP ${res.status}: ${err}`);
+    }
+    return res;
+  }
+
+  function optModel(val) {
+    return val.trim() || undefined;
+  }
+
+  // ── Config ────────────────────────────────────────────────────────────────
+
+  function saveAndPing() {
+    const url = $('baseUrl').value.trim();
+    if (url) localStorage.setItem('ollamaBaseUrl', url);
+    ping();
+  }
+
+  async function ping() {
+    setStatus(false, 'checking…');
+    try {
+      const res = await fetch(getBase() + '/health', { signal: AbortSignal.timeout(5000), headers: NGROK_HEADERS });
+      const data = await res.json();
+      if (data.ollamaReachable) {
+        setStatus(true, `up — ${data.defaultModel} — ${data.latencyMs}ms`);
+      } else {
+        setStatus(false, `app up, Ollama unreachable`);
+      }
+    } catch (e) {
+      setStatus(false, 'unreachable');
+    }
+  }
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+
+  let activeStream = null;
+
+  async function sendChat(stream) {
+    const prompt = $('chatPrompt').value.trim();
+    if (!prompt) return;
+
+    if (activeStream) { activeStream.abort(); activeStream = null; }
+
+    const out = $('chatOut');
+    out.className = 'response-content loading';
+    out.textContent = '';
+    $('chatBtn').disabled = true;
+    $('streamBtn').disabled = true;
+
+    const body = {
+      prompt,
+      model: optModel($('chatModel').value),
+      systemPrompt: $('chatSystem').value.trim() || undefined
+    };
+
+    try {
+      if (stream) {
+        const controller = new AbortController();
+        activeStream = controller;
+        out.classList.add('streaming-cursor');
+
+        const res = await fetch(getBase() + '/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        out.className = 'response-content streaming-cursor';
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          // SSE: lines starting with "data:"
+          chunk.split('\n').forEach(line => {
+            if (line.startsWith('data:')) {
+              out.textContent += line.slice(5);
+            }
+          });
+        }
+        out.classList.remove('streaming-cursor');
+        activeStream = null;
+      } else {
+        const res = await apiPost('/chat', body);
+        const data = await res.json();
+        out.className = 'response-content';
+        out.textContent = data.response || JSON.stringify(data, null, 2);
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') showError('chatOut', e.message);
+      out.classList.remove('streaming-cursor');
+    }
+
+    $('chatBtn').disabled = false;
+    $('streamBtn').disabled = false;
+  }
+
+  // ── Code Review ───────────────────────────────────────────────────────────
+
+  async function sendReview() {
+    const code = $('reviewCode').value.trim();
+    if (!code) return;
+
+    setLoading('reviewOut', 'reviewBtn', true);
+
+    const body = {
+      code,
+      language: $('reviewLang').value.trim() || 'Kotlin',
+      model: optModel($('reviewModel').value)
+    };
+
+    try {
+      const res = await apiPost('/tools/review', body);
+      const data = await res.json();
+      renderReview('reviewOut', data);
+    } catch (e) {
+      showError('reviewOut', e.message);
+    }
+    $('reviewBtn').disabled = false;
+  }
+
+  function renderReview(outId, data) {
+    const out = $(outId);
+    out.className = 'response-content';
+    out.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.style.marginBottom = '10px';
+    header.innerHTML = `<strong>Score</strong><span class="score-badge">${data.score ?? '?'}/10</span>`;
+    if (data.summary) {
+      const s = document.createElement('div');
+      s.style.marginTop = '6px';
+      s.style.fontSize = '13px';
+      s.textContent = data.summary;
+      header.appendChild(s);
+    }
+    out.appendChild(header);
+
+    if (data.issues && data.issues.length) {
+      const t = document.createElement('div');
+      t.style.fontSize = '12px';
+      t.style.color = 'var(--text-dim)';
+      t.style.textTransform = 'uppercase';
+      t.style.letterSpacing = '0.5px';
+      t.style.marginBottom = '8px';
+      t.textContent = `Issues (${data.issues.length})`;
+      out.appendChild(t);
+
+      data.issues.forEach(issue => {
+        const card = document.createElement('div');
+        card.className = 'issue-card';
+        card.innerHTML = `
+          <div class="severity ${issue.severity}">${issue.severity}</div>
+          <div class="issue-desc">${escHtml(issue.description)}</div>
+          ${issue.suggestion ? `<div class="issue-suggest">→ ${escHtml(issue.suggestion)}</div>` : ''}
+        `;
+        out.appendChild(card);
+      });
+    }
+
+    if (!data.issues || !data.issues.length) {
+      const ok = document.createElement('div');
+      ok.style.color = 'var(--green)';
+      ok.textContent = '✓ No issues found.';
+      out.appendChild(ok);
+    }
+  }
+
+  // ── Commit ────────────────────────────────────────────────────────────────
+
+  async function sendCommit() {
+    const diff = $('commitDiff').value.trim();
+    if (!diff) return;
+
+    setLoading('commitOut', 'commitBtn', true);
+
+    const body = {
+      diff,
+      model: optModel($('commitModel').value)
+    };
+
+    try {
+      const res = await apiPost('/tools/commit', body);
+      const data = await res.json();
+      renderCommit('commitOut', data);
+    } catch (e) {
+      showError('commitOut', e.message);
+    }
+    $('commitBtn').disabled = false;
+  }
+
+  function renderCommit(outId, data) {
+    const out = $(outId);
+    out.className = 'response-content';
+    out.innerHTML = `
+      <div class="commit-result">
+        <div class="commit-msg">${escHtml(data.message || '')}</div>
+        <div class="commit-meta">
+          <span>type: ${data.type || '—'}</span>
+          ${data.scope ? `<span>scope: ${data.scope}</span>` : ''}
+        </div>
+        ${data.description ? `<div style="margin-top:8px;font-size:13px;color:var(--text-dim)">${escHtml(data.description)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  // ── Summarize ─────────────────────────────────────────────────────────────
+
+  async function sendSummarize() {
+    const text = $('sumText').value.trim();
+    if (!text) return;
+
+    setLoading('sumOut', 'sumBtn', true);
+
+    const body = {
+      text,
+      style: $('sumStyle').value,
+      model: optModel($('sumModel').value)
+    };
+
+    try {
+      const res = await apiPost('/tools/summarize', body);
+      const data = await res.json();
+      const out = $('sumOut');
+      out.className = 'response-content';
+      out.textContent = data.summary || JSON.stringify(data, null, 2);
+    } catch (e) {
+      showError('sumOut', e.message);
+    }
+    $('sumBtn').disabled = false;
+  }
+
+  // ── Utils ─────────────────────────────────────────────────────────────────
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  (function init() {
+    const saved = localStorage.getItem('ollamaBaseUrl');
+    if (saved) $('baseUrl').value = saved;
+    ping();
+
+    // Enter → send (not in textarea)
+    document.querySelectorAll('input[type=text]').forEach(inp => {
+      inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') saveAndPing();
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

@@ -1,6 +1,7 @@
 HOST    ?= http://localhost:8080
 MODEL   ?= phi4-mini
 PROFILE ?= local
+NGROK_PORT ?= 8080
 
 # ─── Build & Run ─────────────────────────────────────────────────────────────
 
@@ -55,6 +56,17 @@ smoke:
 .PHONY: smoke-all
 smoke-all:
 	@HOST=$(HOST) MODEL=$(MODEL) bash scripts/smoke-all.sh
+
+# ─── Frontend / Tunnel ───────────────────────────────────────────────────────
+
+.PHONY: tunnel
+tunnel:
+	ngrok http $(NGROK_PORT)
+
+.PHONY: serve-frontend
+serve-frontend:
+	@echo "Open http://localhost:8181 and paste your ngrok URL as base URL"
+	@python3 -m http.server 8181 --directory docs
 
 # ─── Help ────────────────────────────────────────────────────────────────────
 

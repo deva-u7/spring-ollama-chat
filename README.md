@@ -78,6 +78,9 @@ make summarize-paragraph # POST /tools/summarize — PARAGRAPH
 
 make smoke              # Core endpoints — health, models, chat, review, commit, summarize
 make smoke-all          # Every endpoint × every payload variant
+
+make tunnel             # Start ngrok tunnel on port 8080
+make serve-frontend     # Serve frontend/ on port 8181 (for local dev)
 ```
 
 Override model or host:
@@ -233,6 +236,33 @@ resources/
 The service layer is the abstraction point. When adding LangChain4j or Spring AI, only the client layer changes — services stay the same.
 
 See [docs/architecture.md](docs/architecture.md) for the full design.
+
+## Frontend
+
+`docs/index.html` is a single-file, no-framework UI for all endpoints.
+
+- **Base URL field** — paste `http://localhost:8080` or an ngrok URL, saved to localStorage
+- **Tabs**: Chat · Code Review · Commit · Summarize
+- **SSE streaming** — the Chat tab supports real-time token streaming
+- **Mobile-friendly** — works from phone when exposed via ngrok
+
+**To use from your phone:**
+
+```bash
+# Terminal 1 — run the API
+make run
+
+# Terminal 2 — start ngrok tunnel
+make tunnel          # prints a public URL like https://abc123.ngrok-free.app
+
+# Terminal 3 — serve the frontend locally
+make serve-frontend  # → http://localhost:8181
+
+# Or: open frontend/index.html directly in a browser
+# Paste the ngrok URL as the base URL in the page → works from any device
+```
+
+The page can also be hosted on [GitHub Pages](https://pages.github.com/) — push `frontend/` to the repo and enable Pages from the `main` branch.
 
 ## What's Next
 
